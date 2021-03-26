@@ -1,6 +1,6 @@
-import blessed from 'blessed';
+import blessed from 'blessed'
 
-export default class ComponentBuilder {
+export default class ComponentsBuilder {
     #screen
     #layout
     #input
@@ -8,7 +8,7 @@ export default class ComponentBuilder {
     #status
     #activityLog
 
-    constructor() {}
+    constructor() { }
 
     #baseComponent() {
         return {
@@ -20,6 +20,7 @@ export default class ComponentBuilder {
                 ch: ' ',
                 inverse: true
             },
+            // habilita colocar cores e tags no texto
             tags: true
         }
     }
@@ -35,7 +36,7 @@ export default class ComponentBuilder {
         return this
     }
 
-    setLayout() {
+    setLayoutComponent() {
         this.#layout = blessed.layout({ 
             parent: this.#screen,
             width: '100%',
@@ -45,7 +46,7 @@ export default class ComponentBuilder {
         return this
     }
 
-    setInput(onEnterEvent) {
+    setInputComponent(onEnterPressed) {
         const input = blessed.textarea({
             parent: this.#screen,
             bottom: 0,
@@ -61,26 +62,26 @@ export default class ComponentBuilder {
             }
         })
 
-        input.key('enter', onEnterEvent)
+        input.key('enter', onEnterPressed)
         this.#input = input
 
         return this
+
     }
 
-    setChat() {
+    setChatComponent() {
         this.#chat = blessed.list({
             ...this.#baseComponent(),
             parent: this.#layout,
             align: 'left',
             width: '50%',
             height: '90%',
-            items: ['{bold}Messenger{/}' ]
+            items: ['{bold}Messenger{/}']
         })
 
         return this
     }
-
-    setStatus() {
+    setStatusComponent() {
         this.#status = blessed.list({
             ...this.#baseComponent(),
             parent: this.#layout,
@@ -91,7 +92,7 @@ export default class ComponentBuilder {
         return this
     }
 
-    setActivityLog() {
+    setActivityLogComponent() {
         this.#activityLog = blessed.list({
             ...this.#baseComponent(),
             parent: this.#layout,
@@ -118,3 +119,4 @@ export default class ComponentBuilder {
         return components
     }
 }
+

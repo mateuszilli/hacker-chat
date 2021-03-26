@@ -1,27 +1,31 @@
+const PRODUCTION_URL = 'https://hacker-chat-mateuszilli.herokuapp.com'
+
 export default class CliConfig {
 
-    constructor({ username, room, url }) {
+    constructor({ username, room, url = PRODUCTION_URL }) {
         this.username = username
-        this.room = room
+        this.room = room 
 
         const { hostname, port, protocol } = new URL(url)
-        this.hostname = hostname
+
+        this.host = hostname
         this.port = port
         this.protocol = protocol.replace(/\W/, '')
     }
 
     static parseArguments(commands) {
+        const cmd = new Map()
         const prefix = '--'
-        const cmd = new Map();
 
-        for (const key in commands) {
+        for(const key in commands) {
+
             const index = parseInt(key)
-            const comand = commands[key];
+            const command = commands[key]
 
-            if (!comand.includes(prefix)) continue;
-
+            if(!command.includes(prefix)) continue;
+            
             cmd.set(
-                comand.replace(prefix, ''),
+                command.replace(prefix, ''),
                 commands[index + 1]
             )
         }

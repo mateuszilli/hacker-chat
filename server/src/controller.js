@@ -1,134 +1,123 @@
-import { constant } from './constant.js'
+import { constants } from "./constants.js"
 
 export default class Controller {
     #users = new Map()
     #rooms = new Map()
 
-    constructor({ socket }) {
-        this.socket = socket
+    constructor({ socketServer }) {
+        this.socketServer = socketServer
+    }
+    onNewConnection(socket) {
+        const { id } = socket
+        console.log('connection stablished with', id)
+        const userData = { id, socket }
+        this.#updateGlobalUserData(id, userData)
+
+        socket.on('data', this.#onSocketData(id))
+        socket.on('error', this.#onSocketClosed(id))
+        socket.on('end', this.#onSocketClosed(id))
+    }
+    async joinRoom(socketId, data) {
+        const userData = data
+        console.log(`${userData.userName} joined! ${[socketId]}`)
+        const user = this.#updateGlobalUserData(socketId, userData)
+
+        const { roomId } = userData
+        const users = this.#joinUserOnRoom(roomId, user)
+
+        const currentUsers = Array.from(users.values())
+            .map(({ id, userName }) => ({ userName, id }))
+
+        //  atualiza o usuario corrente sobre todos os usuarios
+        // que jaa estao conectados na mesma sala
+        this.socketServer
+            .sendMessage(user.socket, constants.events.UPDATE_USERS, currentUsers)
+
+        // avisa a rede que um novo usuario conectou-se
+        this.broadCast({
+            socketId,
+            roomId,
+            message: { id: socketId, userName: userData.userName },
+            event: constants.events.NEW_USER_CONNECTED,
+        })
     }
 
-    #updateUserdata(socketId, userdata) {
-        const users = this.#users
-        const user = users.get(socketId) ?? {}
+    broadCast({ socketId, roomId, event, message, includeCurrentSocket = false }) {
+        const usersOnRoom = this.#rooms.get(roomId)
 
-        const updatedUserdata = {
-            ...user,
-            ...userdata
+        for (const [key, user] of usersOnRoom) {
+            if (!includeCurrentSocket && key === socketId) continue;
+
+            this.socketServer.sendMessage(user.socket, event, message)
         }
 
-        users.set(socketId, updatedUserdata)
-
-        return users.get(socketId)
     }
+    message(socketId, data) {
+        const { userName, roomId } = this.#users.get(socketId)
 
-    #onSocketData(id) {
-        return data => {
-            try {
-                const { event, message } = JSON.parse(data)
-                console.log('socket', id)
-                console.log('event', event)
-                console.log('message', message)
-                console.log('onSocketData', data)
-                this[event](id, message)
-            } catch (error) {
-                console.error(`[Error] ~ `, data, error)
-            }
-        }
-    }
+        this.broadCast({
+            roomId,
+            socketId,
+            event: constants.events.MESSAGE,
+            message: { userName, message: data },
+            includeCurrentSocket: true,
+        })
 
-    #onSocketError(id) {
-        return data => {
-            console.log('onSocketError', id, data)
-        }
-    }
-
-    #onSocketEnd(id) {
-        return _ => {
-            const { username, roomId } = this.#users.get(id)
-            console.log(username, 'disconnected', id)
-            this.#outUserOnRoom(id, roomId)
-
-            this.broadcast({
-                roomId,
-                socketId: id,
-                message: { id, username },
-                event: constant.events.USER_DISCONNECTED
-            })
-        }
     }
 
     #joinUserOnRoom(roomId, user) {
         const usersOnRoom = this.#rooms.get(roomId) ?? new Map()
-
         usersOnRoom.set(user.id, user)
-        this.#rooms.set(roomId, usersOnRoom);
+        this.#rooms.set(roomId, usersOnRoom)
 
         return usersOnRoom
     }
 
-    #outUserOnRoom(id, roomId) {
+    #logoutUser(id, roomId) {
         this.#users.delete(id)
         const usersOnRoom = this.#rooms.get(roomId)
-        usersOnRoom.delete(id);
+        usersOnRoom.delete(id)
 
         this.#rooms.set(roomId, usersOnRoom)
     }
 
-    broadcast({ socketId, roomId, event, message, currentSocket = false }) {
-        const usersOnRoom = this.#rooms.get(roomId)
+    #onSocketClosed(id) {
+        return _ => {
+            const { userName, roomId } = this.#users.get(id)
+            console.log(userName, 'diconnected', id)
+            this.#logoutUser(id, roomId)
 
-        for (const [key, user] of usersOnRoom) {
-            if (!currentSocket && key === socketId) continue
-            
-            this.socket.sendMessage(user.socket, event, message)
+            this.broadCast({
+                roomId,
+                message: { id, userName },
+                socketId: id,
+                event: constants.events.DISCONNECT_USER,
+            })
+
+        }
+    }
+    #onSocketData(id) {
+        return data => {
+            try {
+                const { event, message } = JSON.parse(data)
+                this[event](id, message)
+            } catch (error) {
+                console.error(`wrong event format!!`, data.toString())
+            }
         }
     }
 
-    message(id, data) {
-        const { username, roomId } = this.#users.get(id)
+    #updateGlobalUserData(socketId, userData) {
+        const users = this.#users
+        const user = users.get(socketId) ?? {}
 
-        this.broadcast({
-            roomId,
-            socketId: id,
-            message: { username, message: data },
-            event: constant.events.MESSAGE,
-            currentSocket: true
-        })
-    }
+        const updatedUserData = {
+            ...user,
+            ...userData
+        }
 
-    onNewConnection(socket) {
-        const { id } = socket;
-        console.log('connection stablished: ', id)
-        const userdata = { id, socket }
-        this.#updateUserdata(id, userdata)
+        users.set(socketId, updatedUserData)
 
-        socket.on('data', this.#onSocketData(id))
-        socket.on('error', this.#onSocketError(id))
-        socket.on('end', this.#onSocketEnd(id))
-    }
-
-    async joinRoom(socketId, data) {
-        const userdata = data
-        console.log(`${userdata.username} join: `, socketId)
-        const user = this.#updateUserdata(socketId, userdata)
-
-        const { roomId } = userdata
-        const users = this.#joinUserOnRoom(roomId, user)
-
-        const currentUsers = Array.from(users.values())
-            .map(({ id, username }) => ({ id, username }))
-
-        this.socket.sendMessage(user.socket, constant.events.USER_UPDATED, currentUsers)
-
-        this.broadcast({
-            socketId,
-            roomId,
-            message: {
-                id: socketId,
-                username: userdata.username
-            },
-            event: constant.events.USER_CONNECTED
-        })
+        return users.get(socketId)
     }
 }

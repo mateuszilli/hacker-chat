@@ -1,26 +1,54 @@
-import Events from 'events'
-import CliConfig from './src/cliConfig.js'
-import EventManager from './src/eventManager.js';
-import Socket from './src/socket.js'
-import TerminalController from './src/terminalController.js'
+#!/usr/bin/env node
 
-const [node, file, ...commands] = process.argv;
+
+/*
+
+    chmod +x index.js
+
+*/
+
+/*
+
+npm i -g @erickwendel/hacker-chat-client
+
+npm unlink -g @erickwendel/hacker-chat-client
+hacker-chat \
+    --username erickwendel \
+    --room sala01
+
+./index.js \
+    --username erickwendel \
+    --room sala01
+
+node index.js \
+    --username erickwendel \
+    --room sala01 \
+    --hostUri localhost
+*/
+
+import Events from 'events'
+import CliConfig from './src/cliConfig.js';
+import EventManager from './src/eventManager.js';
+import SocketClient from './src/socket.js';
+import TerminalController from "./src/terminalController.js";
+
+
+const [nodePath, filePath, ...commands] = process.argv
 const config = CliConfig.parseArguments(commands)
 
-const events = new Events();
+const componentEmitter = new Events()
+const socketClient = new SocketClient(config)
+await socketClient.initialize()
+const eventManager = new EventManager({ componentEmitter, socketClient})
+const events = eventManager.getEvents()
+socketClient.attachEvents(events)
 
-const socket = new Socket(config)
-await socket.initialize()
-
-const eventManager = new EventManager({ events, socket })
-
-const ownEvents = eventManager.getEvents();
-socket.attachEvents(ownEvents)
-
-eventManager.joinRoom({
+const data = {
     roomId: config.room,
-    username: config.username
-})
+    userName: config.username
+}
+eventManager.joinRoomAndWaitForMessages(data)
 
-const controller = new TerminalController();
-await controller.initializeTable(events);
+const controller = new TerminalController()
+await controller.initializeTable(componentEmitter)
+

@@ -1,8 +1,8 @@
-import http from 'http';
-import { v4 } from 'uuid';
-import { constant } from './constant.js'
+import http from 'http'
+import { v4 } from 'uuid'
+import { constants } from './constants.js'
 
-export default class Socket {
+export default class SocketServer {
     constructor({ port }) {
         this.port = port
     }
@@ -11,7 +11,6 @@ export default class Socket {
         const data = JSON.stringify({ event, message })
         socket.write(`${data}\n`)
     }
-
     async initialize(eventEmitter) {
         const server = http.createServer((req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/plain' })
@@ -28,7 +27,7 @@ export default class Socket {
             ].map(line => line.concat('\r\n')).join('')
 
             socket.write(headers)
-            eventEmitter.emit(constant.events.USER_CONNECTED, socket)
+            eventEmitter.emit(constants.events.NEW_USER_CONNECTED, socket)
         })
 
 
@@ -36,5 +35,6 @@ export default class Socket {
             server.on('error', reject)
             server.listen(this.port, () => resolve(server))
         })
+
     }
 }

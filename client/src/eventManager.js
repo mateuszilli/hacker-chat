@@ -1,55 +1,58 @@
-import { constant } from './constant.js'
+import { constants } from './constants.js'
 
 export default class EventManager {
-    #users = new Map()
-
-    constructor({ events, socket }) {
-        this.events = events,
-        this.socket = socket
+    #allUsers = new Map()
+    constructor({ componentEmitter, socketClient }) {
+        this.componentEmitter = componentEmitter
+        this.socketClient = socketClient
     }
 
-    #emitComponentUpdate(event, message) {
-        this.events.emit(event, message)
+    joinRoomAndWaitForMessages(data) {
+        this.socketClient.sendMessage(constants.events.socket.JOIN_ROOM, data)
+
+        this.componentEmitter.on(constants.events.app.MESSAGE_SENT, msg => {
+            this.socketClient.sendMessage(constants.events.socket.MESSAGE, msg)
+        })
     }
-
-    #updateActivityLogComponent(message) {
-        const event = constant.events.app.ACTIVITYLOG_UPDATED
-
-        this.#emitComponentUpdate(event, message)
+    updateUsers(users) {
+        const connectedUsers = users
+        connectedUsers.forEach(({ id, userName }) => this.#allUsers.set(id, userName))
+        this.#updateUsersComponent()
     }
+    disconnectUser(user) {
+        const { userName, id } = user
+        this.#allUsers.delete(id)
 
-    #updateStatusComponent() {
-        const event = constant.events.app.STATUS_UPDATED
-        const message = Array.from(this.#users.values())
-
-        this.#emitComponentUpdate(event, message)
-    }
-
-    userConnected(data) {
-        const { id, username } = data
-        this.#users.set(id, username)
-        this.#updateStatusComponent()
-        this.#updateActivityLogComponent(`${username} join`)
-    }
-
-    userDisconnected(data) {
-        const { id, username } = data
-        this.#users.delete(id)
-
-        this.#updateActivityLogComponent(`${username} left`)
-        this.#updateStatusComponent()
-    }
-
-    userUpdated(data) {
-        const users = data
-        users.forEach(({ id, username }) => this.#users.set(id, username));
-        this.#updateStatusComponent()
+        this.#updateActivityLogComponent(`${userName} left!`)
+        this.#updateUsersComponent()
     }
 
     message(message) {
-        const event = constant.events.app.MESSAGE_RECEIVED
+        this.componentEmitter.emit(
+            constants.events.app.MESSAGE_RECEIVED,
+            message
+        )
+    }
+    newUserConnected(message) {
+        const user = message
+        this.#allUsers.set(user.id, user.userName)
+        this.#updateUsersComponent()
+        this.#updateActivityLogComponent(`${user.userName} joined!`)
+    }
 
-        this.#emitComponentUpdate(event, message)
+    #updateActivityLogComponent(message) {
+        this.componentEmitter.emit(
+            constants.events.app.ACTIVITYLOG_UPDATED,
+            message
+        )
+    }
+
+    #updateUsersComponent() {
+        this.componentEmitter.emit(
+            constants.events.app.STATUS_UPDATED,
+            Array.from(this.#allUsers.values())
+        )
+
     }
 
     getEvents() {
@@ -60,11 +63,4 @@ export default class EventManager {
         return new Map(functions)
     }
 
-    joinRoom(data) {
-        this.socket.sendMessage(constant.events.socket.JOIN_ROOM, data)
-        
-        this.events.on(constant.events.app.MESSAGE_SENT, message => {
-            this.socket.sendMessage(constant.events.socket.MESSAGE, message)
-        })
-    }
 }
